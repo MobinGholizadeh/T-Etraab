@@ -1,0 +1,61 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: task_manager_redis
+    ports:
+      - "6380:6379"
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: task_manager_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: task_manager_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+
+  api:
+    build: .
+    container_name: task_manager_api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+
+  celery:
+    build: .
+    container_name: task_manager_celery
+    command: celery -A src.infrastructure.queue.celery_app worker --loglevel=info
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+
+  bot:
+    build: .
+    container_name: task_manager_bot
+    command: python -m src.presentation.bot.main
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
